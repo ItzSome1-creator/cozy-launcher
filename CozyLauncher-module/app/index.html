@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>Cozy Launcher</title>
+<style>
+  :root { --tile-w: 300px; --tile-h: 170px; --gap: 28px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #0b1a12; font-family: Arial, Helvetica, sans-serif; color: #fff; }
+  #bg {
+    position: fixed; inset: 0;
+    background: #0b1a12 url("background.jpg") center / cover no-repeat;
+  }
+  /* soft dark gradient at the bottom so tiles and labels stay readable */
+  #shade { position: fixed; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,.15) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,.65) 100%); }
+  #clock { position: fixed; top: 48px; right: 72px; font-size: 44px; font-weight: 600; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+  #clockSI { position: fixed; top: 48px; left: 72px; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+  #clockSI .time { font-size: 44px; font-weight: 600; line-height: 1; }
+  #clockSI .date { font-size: 22px; opacity: .8; margin-top: 8px; }
+  #rowLabel { position: absolute; left: 96px; top: 560px; font-size: 26px; opacity: .85; text-shadow: 0 2px 8px rgba(0,0,0,.7); }
+  #row { position: absolute; left: 96px; top: 620px; display: flex; gap: var(--gap); align-items: flex-start; transition: transform .25s ease; }
+  .tile {
+    position: relative; width: var(--tile-w); height: var(--tile-h); border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; font-weight: 700; letter-spacing: .5px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.45);
+    transition: transform .18s ease, box-shadow .18s ease;
+    flex: 0 0 auto;
+  }
+  .tile .label {
+    position: absolute; left: 0; right: 0; bottom: -52px; text-align: center;
+    font-size: 28px; font-weight: 400; opacity: 0; transition: opacity .15s;
+    text-shadow: 0 2px 8px rgba(0,0,0,.8);
+  }
+  .tile.focus { transform: scale(1.12); z-index: 2; box-shadow: 0 0 0 5px rgba(255,255,255,.9), 0 14px 34px rgba(0,0,0,.6); }
+  .tile.focus .label { opacity: 1; }
+  .yt  { background: #ff0000; }
+  .nf  { background: #fff; color: #e50914; }
+  .sp  { background: #1db954; color: #04130a; }
+  .web { background: #1a73e8; }
+  .atv { background: linear-gradient(135deg,#1b1b1d,#050505); }
+  .web2{ background: #34a853; }
+  #hint { position: fixed; bottom: 34px; left: 0; right: 0; text-align: center; font-size: 22px; opacity: .6; }
+  #toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.75); padding: 14px 28px; border-radius: 12px; font-size: 24px; display: none; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="shade"></div>
+<div id="clockSI"><div class="time" id="siTime"></div><div class="date" id="siDate"></div></div>
+<div id="clock"></div>
+<div id="rowLabel">Apps</div>
+<div id="row"></div>
+<div id="toast"></div>
+<div id="hint">Arrow keys to move &middot; OK to open</div>
+
+<script>
+/* ============================================================
+   EDIT THIS LIST to change apps or order.
+   appId = Tizen app ID of the installed app.
+   type "url" opens a web page in the TV browser instead.
+   The IDs below are the commonly published Samsung TV IDs, but they
+   can differ by region/firmware. Run: sdb shell 0 applist (or use
+   Device Manager in Tizen Studio) to confirm yours.
+   ============================================================ */
+var APPS = [
+  { name: "YouTube",          cls: "yt",   text: "YouTube",   appId: "111299001912",  url: "https://www.youtube.com/tv" },
+  { name: "Netflix",          cls: "nf",   text: "NETFLIX",   appId: "3201907018807", url: "https://www.netflix.com" },
+  { name: "Spotify",          cls: "sp",   text: "Spotify",   appId: "3201606009684", url: "https://open.spotify.com" },
+  { name: "Browser",          cls: "web",  text: "Browser",   url: "https://www.google.com" },
+  { name: "Apple TV",         cls: "atv",  text: "\uF8FF tv", appId: "3201807016597", url: "https://tv.apple.com" },
+  { name: "Browser 2",        cls: "web2", text: "Browser 2", url: "https://duckduckgo.com" }
+];
+
+var row = document.getElementById("row");
+var tiles = [];
+var idx = 0;
+
+APPS.forEach(function (a, i) {
+  var t = document.createElement("div");
+  t.className = "tile " + a.cls;
+  t.innerHTML = a.text + '<div class="label">' + a.name + "</div>";
+  row.appendChild(t);
+  tiles.push(t);
+});
+
+function setFocus(n) {
+  idx = (n + APPS.length) % APPS.length;
+  tiles.forEach(function (t, i) { t.classList.toggle("focus", i === idx); });
+}
+
+function toast(msg) {
+  var el = document.getElementById("toast");
+  el.textContent = msg; el.style.display = "block";
+  setTimeout(function () { el.style.display = "none"; }, 3500);
+}
+
+/* TizenBrew version: first try to open the installed TV app (works only if
+   the tizen API is available inside TizenBrew); if that is not possible or
+   fails, fall back to opening the website in this window. */
+function openWeb(a) {
+  if (a.url) { window.location.href = a.url; }
+  else { toast("Could not open " + a.name); }
+}
+function launch(a) {
+  try {
+    if (a.appId && window.tizen && tizen.application && tizen.application.launch) {
+      tizen.application.launch(a.appId, function () {}, function () { openWeb(a); });
+    } else {
+      openWeb(a);
+    }
+  } catch (e) {
+    openWeb(a);
+  }
+}
+
+document.addEventListener("keydown", function (e) {
+  switch (e.keyCode) {
+    case 37: setFocus(idx - 1); break;   // left
+    case 39: setFocus(idx + 1); break;   // right
+    case 13: launch(APPS[idx]); break;   // OK / Enter
+    case 10009: try { tizen.application.getCurrentApplication().exit(); } catch (x) {} break; // Back
+  }
+});
+
+function tick() {
+  var d = new Date();
+  var h = ("0" + d.getHours()).slice(-2), m = ("0" + d.getMinutes()).slice(-2);
+  document.getElementById("clock").textContent = h + ":" + m;
+}
+tick(); setInterval(tick, 20000);
+
+/* Slovenian time (Europe/Ljubljana). Uses Intl when the TV supports it,
+   otherwise computes CET/CEST by hand (DST: last Sunday of March to last Sunday of October, 01:00 UTC). */
+var DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function lastSundayUTC(year, month) {
+  var d = new Date(Date.UTC(year, month + 1, 0, 1, 0, 0));
+  d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+  return d.getTime();
+}
+function ljubljanaParts() {
+  var now = new Date();
+  try {
+    var f = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Ljubljana", hour12: false,
+      hour: "2-digit", minute: "2-digit", weekday: "short", day: "numeric", month: "short"
+    }).formatToParts(now);
+    var o = {}; f.forEach(function (p) { o[p.type] = p.value; });
+    if (o.hour && o.minute) {
+      return { time: (o.hour === "24" ? "00" : o.hour) + ":" + o.minute, date: o.weekday + " " + o.day + " " + o.month };
+    }
+  } catch (e) {}
+  var y = now.getUTCFullYear();
+  var dst = now.getTime() >= lastSundayUTC(y, 2) && now.getTime() < lastSundayUTC(y, 9);
+  var s = new Date(now.getTime() + (dst ? 2 : 1) * 3600000);
+  return {
+    time: ("0" + s.getUTCHours()).slice(-2) + ":" + ("0" + s.getUTCMinutes()).slice(-2),
+    date: DAYS[s.getUTCDay()] + " " + s.getUTCDate() + " " + MONTHS[s.getUTCMonth()]
+  };
+}
+function tickSI() {
+  var p = ljubljanaParts();
+  document.getElementById("siTime").textContent = p.time;
+  document.getElementById("siDate").textContent = p.date;
+}
+tickSI(); setInterval(tickSI, 20000);
+setFocus(0);
+</script>
+</body>
+</html>

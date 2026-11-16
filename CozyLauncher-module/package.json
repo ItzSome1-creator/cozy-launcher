@@ -1,0 +1,10 @@
+{
+  "name": "cozy-launcher",
+  "version": "1.0.0",
+  "description": "A clean, cozy TV launcher with a custom background and Slovenian clock",
+  "packageType": "app",
+  "appName": "Cozy Launcher",
+  "appPath": "app/index.html",
+  "keys": [],
+  "license": "MIT"
+}
